@@ -1,0 +1,30 @@
+{
+  "name": "hex",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "prebuild": "expo prebuild --clean",
+    "eas:dev:ios": "eas build --profile development --platform ios",
+    "eas:dev:android": "eas build --profile development --platform android",
+    "eas:prod:ios": "eas build --profile production --platform ios",
+    "eas:prod:android": "eas build --profile production --platform android"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-navigation/native": "^7.1.28",
+    "@react-navigation/native-stack": "^7.12.0",
+    "@thebeka/react-native-get-pixel-color": "^1.1.4",
+    "expo": "~54.0.33",
+    "expo-build-properties": "^1.0.10",
+    "expo-dev-client": "^6.0.20",
+    "expo-image-picker": "^17.0.10",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "private": true
+}
