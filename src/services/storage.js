@@ -101,6 +101,22 @@ export async function getSwatches() {
 }
 
 /**
+ * Get recent swatches (all, sorted by createdAt desc)
+ * @param {number} [limit] - Optional limit (default: no limit)
+ * @returns {Promise<Array>}
+ */
+export async function getRecentSwatches(limit) {
+  try {
+    const swatches = await getSwatches();
+    swatches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return limit ? swatches.slice(0, limit) : swatches;
+  } catch (error) {
+    console.error('Error loading recent swatches:', error);
+    return [];
+  }
+}
+
+/**
  * Get swatches for a specific folder
  * @param {string} folderId
  * @returns {Promise<Array>}
@@ -121,6 +137,7 @@ export async function getSwatchesForFolder(folderId) {
  * @param {string} swatchData.folderId - Folder ID
  * @param {string} swatchData.folderName - Folder name
  * @param {string} swatchData.hex - Hex color code
+ * @param {string} [swatchData.name] - Human-readable color name (from color-name-api)
  * @param {object} swatchData.rgb - RGB values {r, g, b}
  * @param {string} swatchData.sampling - Sampling method description
  * @param {object} swatchData.mix - Paint mix formula
@@ -131,9 +148,10 @@ export async function saveSwatch(swatchData) {
     const swatches = await getSwatches();
     const newSwatch = {
       id: Date.now().toString(),
-      folderId: swatchData.folderId,
-      folderName: swatchData.folderName,
+      folderId: swatchData.folderId ?? null,
+      folderName: swatchData.folderName ?? null,
       hex: swatchData.hex,
+      name: swatchData.name ?? null,
       rgb: swatchData.rgb,
       sampling: swatchData.sampling,
       mix: swatchData.mix,
@@ -144,6 +162,25 @@ export async function saveSwatch(swatchData) {
     return newSwatch;
   } catch (error) {
     console.error('Error saving swatch:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update an existing swatch
+ * @param {string} swatchId
+ * @param {object} updates - Partial swatch fields to merge (e.g. { mix })
+ */
+export async function updateSwatch(swatchId, updates) {
+  try {
+    const swatches = await getSwatches();
+    const index = swatches.findIndex((s) => s.id === swatchId);
+    if (index === -1) return null;
+    swatches[index] = { ...swatches[index], ...updates };
+    await AsyncStorage.setItem(STORAGE_KEYS.SWATCHES, JSON.stringify(swatches));
+    return swatches[index];
+  } catch (error) {
+    console.error('Error updating swatch:', error);
     throw error;
   }
 }

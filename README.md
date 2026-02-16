@@ -151,6 +151,9 @@ hex/
 - **expo-image-picker**: Image selection from library
 - **@react-native-async-storage/async-storage**: Local data persistence
 - **@react-navigation/native**: Navigation framework
+- **@react-navigation/native-stack**: Native stack navigator
+- **react-native-safe-area-context**: Safe area support (React Navigation dependency)
+- **react-native-screens**: Native screens optimization (React Navigation dependency)
 - **expo-dev-client**: Custom development build support
 
 ## Platform Support

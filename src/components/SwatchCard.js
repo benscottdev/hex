@@ -1,108 +1,119 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { colors, typography, spacing, radius } from "../theme/ios";
 
-/**
- * SwatchCard component - displays a color swatch with details
- */
-export default function SwatchCard({ swatch, onPress, onDelete }) {
-  const handleLongPress = () => {
-    Alert.alert(
-      'Delete Swatch',
-      'Are you sure you want to delete this swatch?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  };
+export default function SwatchCard({ swatch, onPress, onDelete, inGrid = false, horizontal = false }) {
+	const handleLongPress = () => {
+		Alert.alert("Delete Swatch", "Are you sure you want to delete this swatch?", [
+			{ text: "Cancel", style: "cancel" },
+			{ text: "Delete", style: "destructive", onPress: onDelete },
+		]);
+	};
 
-  const formatDate = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+	const formatDate = (ts) => new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+	const luminance = (hex) => {
+		const r = parseInt(hex.slice(1, 3), 16) / 255;
+		const g = parseInt(hex.slice(3, 5), 16) / 255;
+		const b = parseInt(hex.slice(5, 7), 16) / 255;
+		return 0.299 * r + 0.587 * g + 0.114 * b;
+	};
+	const isLight = luminance(swatch.hex) > 0.6;
 
-  const getPrimaryPigments = () => {
-    if (!swatch.mix || !swatch.mix.pigments) return '';
-    
-    const pigments = Object.entries(swatch.mix.pigments)
-      .sort(([, a], [, b]) => b.percentage - a.percentage)
-      .slice(0, 2)
-      .map(([, p]) => `${p.percentage}% ${p.name}`)
-      .join(' + ');
-    
-    return pigments;
-  };
+	return (
+		<TouchableOpacity
+			style={[styles.card, inGrid && styles.cardGrid, horizontal && styles.cardHorizontal]}
+			onPress={onPress}
+			onLongPress={handleLongPress}
+			activeOpacity={0.92}
+		>
+			<View style={[styles.swatchStripOuter, (inGrid || horizontal) && styles.swatchStripGrid, { backgroundColor: swatch.hex }]}>
+				<View style={[styles.swatchStripInner, { borderColor: isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)" }]} />
+			</View>
 
-  return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      onLongPress={handleLongPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.colorPreview, { backgroundColor: swatch.hex }]} />
-      <View style={styles.details}>
-        <Text style={styles.hex}>{swatch.hex}</Text>
-        <Text style={styles.rgb}>
-          RGB({swatch.rgb.r}, {swatch.rgb.g}, {swatch.rgb.b})
-        </Text>
-        <Text style={styles.mix} numberOfLines={1}>
-          {getPrimaryPigments()}
-        </Text>
-        <Text style={styles.date}>{formatDate(swatch.createdAt)}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+			<View style={[styles.cardBody, (inGrid || horizontal) && styles.cardBodyGrid]}>
+				<Text style={styles.hex} numberOfLines={1}>{swatch.name || swatch.hex}</Text>
+				{swatch.name && <Text style={styles.hexCode} numberOfLines={1}>{swatch.hex}</Text>}
+				<View style={styles.metaRow}>
+					<Text style={styles.dateText}>{formatDate(swatch.createdAt)}</Text>
+					<Ionicons name="chevron-forward" size={14} color={colors.systemGray4} />
+				</View>
+			</View>
+		</TouchableOpacity>
+	);
 }
 
+const SHADOW = Platform.select({
+	ios: {
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.06,
+		shadowRadius: 10,
+	},
+	android: { elevation: 3 },
+});
+
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  colorPreview: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  details: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'space-between',
-  },
-  hex: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-  },
-  rgb: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-  },
-  mix: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-  },
-  date: {
-    fontSize: 11,
-    color: '#aaa',
-    marginTop: 4,
-  },
+	card: {
+		backgroundColor: colors.white,
+		borderRadius: 20,
+		overflow: "hidden",
+		marginHorizontal: spacing.listInset,
+		marginBottom: 12,
+		borderWidth: 1,
+		borderColor: "rgba(58,58,60,0.06)",
+		...SHADOW,
+	},
+	cardGrid: {
+		marginHorizontal: 0,
+	},
+	cardHorizontal: {
+		marginHorizontal: 0,
+		marginBottom: 0,
+	},
+	swatchStripOuter: {
+		height: 96,
+		width: "100%",
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
+		position: "relative",
+	},
+	swatchStripGrid: {
+		height: 80,
+	},
+	swatchStripInner: {
+		...StyleSheet.absoluteFillObject,
+		borderWidth: 1,
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
+	},
+	cardBody: {
+		padding: 14,
+	},
+	cardBodyGrid: {
+		padding: 12,
+		paddingTop: 10,
+	},
+	hex: {
+		...typography.subheadline,
+		fontWeight: "600",
+		color: colors.black,
+		letterSpacing: 0.3,
+		marginBottom: 2,
+	},
+	hexCode: {
+		...typography.caption2,
+		color: colors.systemGray3,
+		letterSpacing: 0.3,
+		marginBottom: 4,
+	},
+	metaRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
+	dateText: {
+		...typography.caption2,
+		color: colors.systemGray3,
+	},
 });

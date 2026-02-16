@@ -1,8 +1,13 @@
-import { getPixelColor } from '@thebeka/react-native-get-pixel-color';
+import { Platform, NativeModules } from 'react-native';
+import { init, pickColorAt } from '@thebeka/react-native-get-pixel-color';
+
+const pixelColorModule = Platform.OS === 'ios' ? NativeModules.RNPixelColor : NativeModules.GetPixelColor;
+const NATIVE_MODULE_MISSING = !pixelColorModule;
 
 /**
  * Color extraction service using @thebeka/react-native-get-pixel-color
- * Implements 8×8 averaging with proper sRGB ↔ linear RGB conversion
+ * Implements 16×16 averaging with proper sRGB ↔ linear RGB conversion
+ * Requires a development build (expo run:ios) — does not work in Expo Go.
  */
 
 /**
@@ -39,35 +44,32 @@ function rgbToHex(r, g, b) {
 }
 
 /**
+ * Convert HEX color to RGB
+ * @param {string} hex - Hex color like "#RRGGBB"
+ * @returns {{r: number, g: number, b: number}}
+ */
+function hexToRgb(hex) {
+  // Remove # if present
+  hex = hex.replace(/^#/, '');
+  
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  
+  return { r, g, b };
+}
+
+/**
  * Extract color from a single pixel
- * @param {string} imageUri - URI of the image
  * @param {number} x - X coordinate
  * @param {number} y - Y coordinate
  * @returns {Promise<{r: number, g: number, b: number} | null>}
  */
-async function getSinglePixelColor(imageUri, x, y) {
+async function getSinglePixelColor(x, y) {
   try {
-    const color = await getPixelColor(imageUri, x, y);
-    
-    // Parse the color format returned by the library
-    // The library may return different formats, typically: {r, g, b} or rgb(r, g, b)
-    if (typeof color === 'object' && color.r !== undefined) {
-      return { r: color.r, g: color.g, b: color.b };
-    }
-    
-    // If string format like "rgb(r, g, b)", parse it
-    if (typeof color === 'string') {
-      const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (match) {
-        return {
-          r: parseInt(match[1], 10),
-          g: parseInt(match[2], 10),
-          b: parseInt(match[3], 10),
-        };
-      }
-    }
-    
-    return null;
+    // pickColorAt returns a HEX string like "#RRGGBB"
+    const hexColor = await pickColorAt(x, y);
+    return hexToRgb(hexColor);
   } catch (error) {
     console.warn(`Failed to get pixel at (${x}, ${y}):`, error.message);
     return null;
@@ -75,7 +77,7 @@ async function getSinglePixelColor(imageUri, x, y) {
 }
 
 /**
- * Extract color from an 8×8 pixel grid around a tap point
+ * Extract color from a pixel grid around a tap point
  * Performs proper linear RGB averaging
  * 
  * @param {string} imageUri - URI of the image
@@ -85,21 +87,37 @@ async function getSinglePixelColor(imageUri, x, y) {
  * @param {number} imageHeight - Original image height
  * @returns {Promise<{hex: string, rgb: {r: number, g: number, b: number}, sampling: string}>}
  */
+export const EXPO_GO_UNSUPPORTED_MESSAGE =
+  'Color extraction is not available in Expo Go. Build and run the app with "npx expo run:ios" (or open the project in Xcode) so the native module is included.';
+
 export async function extract8x8AverageColor(imageUri, centerX, centerY, imageWidth, imageHeight) {
+  if (NATIVE_MODULE_MISSING) {
+    throw new Error(EXPO_GO_UNSUPPORTED_MESSAGE);
+  }
+
+  const gridSize = 16;
+  // Initialize the library with the image first (iOS: file path, Android: base64)
+  try {
+    await init(imageUri);
+  } catch (error) {
+    throw new Error(`Failed to initialize image: ${error.message}`);
+  }
+  
   const samples = [];
+  const halfGrid = Math.floor(gridSize / 2);
   
-  // Calculate 8×8 grid centered on tap point
-  const startX = centerX - 4;
-  const startY = centerY - 4;
+  // Calculate grid centered on tap point
+  const startX = centerX - halfGrid;
+  const startY = centerY - halfGrid;
   
-  // Sample 64 pixels in an 8×8 grid
-  for (let dy = 0; dy < 8; dy++) {
-    for (let dx = 0; dx < 8; dx++) {
+  // Sample pixels in the grid
+  for (let dy = 0; dy < gridSize; dy++) {
+    for (let dx = 0; dx < gridSize; dx++) {
       // Clamp coordinates at image edges
       const x = Math.max(0, Math.min(imageWidth - 1, startX + dx));
       const y = Math.max(0, Math.min(imageHeight - 1, startY + dy));
       
-      const color = await getSinglePixelColor(imageUri, x, y);
+      const color = await getSinglePixelColor(x, y);
       if (color) {
         samples.push(color);
       }
@@ -137,7 +155,7 @@ export async function extract8x8AverageColor(imageUri, centerX, centerY, imageWi
   return {
     hex,
     rgb: avgSrgb,
-    sampling: '8x8 average via react-native-get-pixel-color',
+    sampling: `${gridSize}×${gridSize} pixel average`,
   };
 }
 
