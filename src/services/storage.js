@@ -9,7 +9,43 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEYS = {
   FOLDERS: '@hex_folders',
   SWATCHES: '@hex_swatches',
+  SKIPPED_LOGIN: '@hex_skipped_login',
 };
+
+/**
+ * Get whether the user skipped login (using app without account).
+ * @returns {Promise<boolean>}
+ */
+export async function getSkippedLogin() {
+  try {
+    const v = await AsyncStorage.getItem(STORAGE_KEYS.SKIPPED_LOGIN);
+    return v === 'true';
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Set that the user skipped login.
+ */
+export async function setSkippedLogin() {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.SKIPPED_LOGIN, 'true');
+  } catch (error) {
+    console.error('Error saving skipped login:', error);
+  }
+}
+
+/**
+ * Clear skipped login (e.g. when user signs out).
+ */
+export async function clearSkippedLogin() {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.SKIPPED_LOGIN);
+  } catch (error) {
+    console.error('Error clearing skipped login:', error);
+  }
+}
 
 /**
  * Get all folders
@@ -101,15 +137,17 @@ export async function getSwatches() {
 }
 
 /**
- * Get recent swatches (all, sorted by createdAt desc)
+ * Get recent swatches that are not in any folder (recents = uncategorized only).
+ * Sorted by createdAt desc. Avoids duplicating a color in recents when it's also saved to a folder.
  * @param {number} [limit] - Optional limit (default: no limit)
  * @returns {Promise<Array>}
  */
 export async function getRecentSwatches(limit) {
   try {
     const swatches = await getSwatches();
-    swatches.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    return limit ? swatches.slice(0, limit) : swatches;
+    const recentsOnly = swatches.filter((s) => s.folderId == null);
+    recentsOnly.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return limit ? recentsOnly.slice(0, limit) : recentsOnly;
   } catch (error) {
     console.error('Error loading recent swatches:', error);
     return [];

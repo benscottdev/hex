@@ -1,9 +1,72 @@
-import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Dimensions } from "react-native";
-import Slider from "@react-native-community/slider";
+import React, { useState, useMemo, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform, Dimensions, PanResponder } from "react-native";
 import { colors, typography, spacing } from "../theme/ios";
 import { getHowToMixGuide, getMatchPercent, simulateMix, getPigmentHex } from "../services/paintMixer";
 import { updateSwatch } from "../services/storage";
+import { getColorName } from "../services/colorNameService";
+
+/** Pure-JS slider to avoid native RNCSlider (unimplemented in some builds). */
+function SimpleSlider({ value, onValueChange, minimumValue = 0, maximumValue = 100, step = 1, minimumTrackTintColor, maximumTrackTintColor, thumbTintColor, style }) {
+	const [trackWidth, setTrackWidth] = useState(0);
+	const trackWidthRef = useRef(0);
+	const clamp = (v) => Math.max(minimumValue, Math.min(maximumValue, v));
+	const toValue = (x, width) => {
+		const w = width ?? trackWidthRef.current;
+		if (w <= 0) return value;
+		const pct = Math.max(0, Math.min(1, x / w));
+		const v = minimumValue + pct * (maximumValue - minimumValue);
+		const stepped = step > 0 ? Math.round(v / step) * step : v;
+		return clamp(stepped);
+	};
+
+	const panResponder = useRef(
+		PanResponder.create({
+			onStartShouldSetPanResponder: () => true,
+			onStartShouldSetPanResponderCapture: () => true,
+			onMoveShouldSetPanResponder: () => true,
+			onPanResponderGrant: (evt) => {
+				const x = evt.nativeEvent.locationX;
+				onValueChange(toValue(x));
+			},
+			onPanResponderMove: (evt) => {
+				const x = evt.nativeEvent.locationX;
+				onValueChange(toValue(x));
+			},
+		}),
+	).current;
+
+	const onLayout = (e) => {
+		const w = e.nativeEvent.layout.width;
+		trackWidthRef.current = w;
+		setTrackWidth(w);
+	};
+
+	const pct = trackWidth > 0 ? (value - minimumValue) / (maximumValue - minimumValue) : 0;
+
+	return (
+		<View
+			style={[{ height: 40, justifyContent: "center" }, style]}
+			onLayout={onLayout}
+			{...panResponder.panHandlers}>
+			<View style={{ height: 6, borderRadius: 3, backgroundColor: maximumTrackTintColor || colors.warmGray, overflow: "visible" }}>
+				<View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct * 100}%`, backgroundColor: minimumTrackTintColor || colors.darkGrey, borderRadius: 3 }} />
+				<View
+					pointerEvents="none"
+					style={{
+						position: "absolute",
+						left: `${pct * 100}%`,
+						marginLeft: -10,
+						top: -7,
+						width: 20,
+						height: 20,
+						borderRadius: 10,
+						backgroundColor: thumbTintColor || colors.darkGrey,
+					}}
+				/>
+			</View>
+		</View>
+	);
+}
 
 export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder = false, showHandle = true }) {
 	const [editMode, setEditMode] = useState(false);
@@ -83,8 +146,10 @@ export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder
 	const handleSave = async () => {
 		if (!editingPigments || !swatch) return;
 		const pigments = {};
+		const weights = {};
 		Object.entries(editingPigments).forEach(([k, p]) => {
 			pigments[k] = { name: p.name, percentage: p.percentage, parts: p.percentage };
+			if (p.percentage > 0) weights[k] = p.percentage;
 		});
 		const mix = {
 			pigments,
@@ -95,8 +160,15 @@ export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder
 				.join(" + "),
 			lightness: swatch.mix?.lightness,
 		};
+		const rgb = simulateMix(weights);
+		const toHex = (n) =>
+			Math.max(0, Math.min(255, Math.round(n)))
+				.toString(16)
+				.padStart(2, "0");
+		const hex = `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`.toUpperCase();
 		try {
-			await updateSwatch(swatch.id, { mix });
+			const name = await getColorName(hex);
+			await updateSwatch(swatch.id, { mix, hex, rgb, name });
 			onSaved?.();
 			setEditMode(false);
 			setEditingPigments(null);
@@ -149,8 +221,7 @@ export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder
 					</View>
 				)}
 				<View style={[styles.mainSwatch, { backgroundColor: currentHex }]}>
-					<Text style={[styles.hexOverlay, { color: isLight ? colors.darkGrey : colors.white }]}>{swatch?.name || currentHex}</Text>
-					{swatch?.name && <Text style={[styles.hexSubline, { color: isLight ? "rgba(58,58,60,0.7)" : "rgba(255,255,255,0.85)" }]}>{currentHex}</Text>}
+					<Text style={[styles.hexOverlay, { color: isLight ? colors.darkGrey : colors.white }]}>{currentHex}</Text>
 				</View>
 				{displayPigments.length > 0 && (
 					<View style={styles.mixInstructions}>
@@ -193,9 +264,11 @@ export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder
 								</TouchableOpacity>
 								{howToMixExpanded ? <Text style={styles.instructionsText}>{getHowToMixGuide(swatch.mix)}</Text> : <Text style={styles.instructionsPreview}>Step-by-step guide</Text>}
 							</View>
-							<TouchableOpacity style={styles.refineButton} onPress={handleRefine}>
-								<Text style={styles.refineButtonText}>Refine Mix</Text>
-							</TouchableOpacity>
+							{pigmentsList.length > 1 && (
+								<TouchableOpacity style={styles.refineButton} onPress={handleRefine}>
+									<Text style={styles.refineButtonText}>Refine Mix</Text>
+								</TouchableOpacity>
+							)}
 						</>
 					) : (
 						<>
@@ -204,7 +277,7 @@ export default function SwatchDetailSheet({ swatch, onClose, onSaved, showFolder
 									<View key={key} style={styles.pigmentEditRow}>
 										<Text style={styles.pigmentLabel}>{pigment.name}</Text>
 										<View style={styles.sliderRow}>
-											<Slider style={styles.slider} minimumValue={0} maximumValue={100} step={1} value={pigment.percentage} onValueChange={(v) => handlePigmentChange(key, v)} minimumTrackTintColor={colors.darkGrey} maximumTrackTintColor={colors.warmGray} thumbTintColor={colors.darkGrey} />
+											<SimpleSlider style={styles.slider} minimumValue={0} maximumValue={100} step={1} value={pigment.percentage} onValueChange={(v) => handlePigmentChange(key, v)} minimumTrackTintColor={colors.darkGrey} maximumTrackTintColor={colors.warmGray} thumbTintColor={colors.darkGrey} />
 											<Text style={styles.pigmentPct}>{pigment.percentage}%</Text>
 										</View>
 									</View>
@@ -368,7 +441,7 @@ const styles = StyleSheet.create({
 		paddingVertical: 12,
 		alignItems: "center",
 		backgroundColor: colors.yellow,
-		borderRadius: 20,
+		borderRadius: 10,
 		marginBottom: 4,
 	},
 	refineButtonText: { ...typography.body, fontWeight: "600", color: colors.darkGrey },
@@ -384,22 +457,24 @@ const styles = StyleSheet.create({
 		paddingVertical: 14,
 		alignItems: "center",
 		backgroundColor: colors.yellow,
-		borderRadius: 20,
+		borderRadius: 10,
 	},
-	cancelEditText: { ...typography.body, fontWeight: "600", color: colors.black },
+	cancelEditText: { ...typography.body, fontWeight: "600", color: colors.darkGrey },
 	saveEditButton: {
 		flex: 1,
-		paddingVertical: 14,
+		height: 50,
 		alignItems: "center",
-		backgroundColor: colors.darkGrey,
-		borderRadius: 20,
+		justifyContent: "center",
+		backgroundColor: colors.ctaOrange,
+		borderRadius: 10,
 	},
-	saveEditText: { ...typography.body, fontWeight: "600", color: colors.white },
+	saveEditText: { ...typography.body, fontWeight: "600", fontSize: 18, color: colors.white },
 	doneButton: {
-		backgroundColor: colors.darkGrey,
-		paddingVertical: 14,
-		borderRadius: 20,
+		backgroundColor: colors.ctaOrange,
+		height: 50,
+		borderRadius: 10,
 		alignItems: "center",
+		justifyContent: "center",
 	},
-	doneButtonText: { ...typography.body, fontWeight: "600", color: colors.white },
+	doneButtonText: { ...typography.body, fontWeight: "600", fontSize: 18, color: colors.white },
 });

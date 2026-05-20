@@ -1,9 +1,37 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, typography, spacing, radius } from "../theme/ios";
+import { colors, typography, spacing } from "../theme/ios";
+import { getColorName } from "../services/colorNameService";
+import { updateSwatch } from "../services/storage";
 
 export default function SwatchCard({ swatch, onPress, onDelete, inGrid = false, horizontal = false }) {
+	const [fetchedName, setFetchedName] = useState(null);
+
+	useEffect(() => {
+		let cancelled = false;
+		if (swatch?.name) {
+			setFetchedName(null);
+			return undefined;
+		}
+		(async () => {
+			const name = await getColorName(swatch.hex);
+			if (cancelled || !name) return;
+			setFetchedName(name);
+			if (swatch?.id) {
+				try {
+					await updateSwatch(swatch.id, { name });
+				} catch {
+					/* ignore persistence errors; subtitle still shows */
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [swatch?.id, swatch?.hex, swatch?.name]);
+
+	const colorName = swatch?.name ?? fetchedName;
 	const handleLongPress = () => {
 		Alert.alert("Delete Swatch", "Are you sure you want to delete this swatch?", [
 			{ text: "Cancel", style: "cancel" },
@@ -21,23 +49,24 @@ export default function SwatchCard({ swatch, onPress, onDelete, inGrid = false, 
 	const isLight = luminance(swatch.hex) > 0.6;
 
 	return (
-		<TouchableOpacity
-			style={[styles.card, inGrid && styles.cardGrid, horizontal && styles.cardHorizontal]}
-			onPress={onPress}
-			onLongPress={handleLongPress}
-			activeOpacity={0.92}
-		>
+		<TouchableOpacity style={[styles.card, inGrid && styles.cardGrid, horizontal && styles.cardHorizontal]} onPress={onPress} onLongPress={handleLongPress} activeOpacity={0.92}>
 			<View style={[styles.swatchStripOuter, (inGrid || horizontal) && styles.swatchStripGrid, { backgroundColor: swatch.hex }]}>
 				<View style={[styles.swatchStripInner, { borderColor: isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.15)" }]} />
 			</View>
 
 			<View style={[styles.cardBody, (inGrid || horizontal) && styles.cardBodyGrid]}>
-				<Text style={styles.hex} numberOfLines={1}>{swatch.name || swatch.hex}</Text>
-				{swatch.name && <Text style={styles.hexCode} numberOfLines={1}>{swatch.hex}</Text>}
-				<View style={styles.metaRow}>
+				<Text style={styles.hex} numberOfLines={1}>
+					{swatch.hex}
+				</Text>
+				{colorName ? (
+					<Text style={styles.colorNameSubtitle} numberOfLines={2}>
+						{colorName}
+					</Text>
+				) : null}
+				{/* <View style={styles.metaRow}>
 					<Text style={styles.dateText}>{formatDate(swatch.createdAt)}</Text>
 					<Ionicons name="chevron-forward" size={14} color={colors.systemGray4} />
-				</View>
+				</View> */}
 			</View>
 		</TouchableOpacity>
 	);
@@ -79,7 +108,7 @@ const styles = StyleSheet.create({
 		position: "relative",
 	},
 	swatchStripGrid: {
-		height: 80,
+		height: 100,
 	},
 	swatchStripInner: {
 		...StyleSheet.absoluteFillObject,
@@ -95,17 +124,16 @@ const styles = StyleSheet.create({
 		paddingTop: 10,
 	},
 	hex: {
-		...typography.subheadline,
+		...typography.title3,
 		fontWeight: "600",
 		color: colors.black,
 		letterSpacing: 0.3,
-		marginBottom: 2,
 	},
-	hexCode: {
-		...typography.caption2,
-		color: colors.systemGray3,
-		letterSpacing: 0.3,
-		marginBottom: 4,
+	colorNameSubtitle: {
+		...typography.caption1,
+		color: colors.systemGray2,
+		marginTop: 4,
+		lineHeight: 16,
 	},
 	metaRow: {
 		flexDirection: "row",

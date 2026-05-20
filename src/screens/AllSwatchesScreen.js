@@ -59,16 +59,7 @@ export default function AllSwatchesScreen({ navigation }) {
 					<Text style={styles.emptySubtitle}>Extract colors from images to see them here.</Text>
 				</View>
 			) : (
-				<FlatList
-					data={swatches}
-					renderItem={renderSwatch}
-					keyExtractor={(item) => item.id}
-					numColumns={2}
-					columnWrapperStyle={styles.columnWrapper}
-					contentContainerStyle={styles.listContent}
-					style={styles.list}
-					showsVerticalScrollIndicator={false}
-				/>
+				<FlatList data={swatches} renderItem={renderSwatch} keyExtractor={(item) => item.id} numColumns={2} columnWrapperStyle={styles.columnWrapper} contentContainerStyle={styles.listContent} style={styles.list} showsVerticalScrollIndicator={false} />
 			)}
 		</View>
 	);
@@ -77,13 +68,13 @@ export default function AllSwatchesScreen({ navigation }) {
 const styles = StyleSheet.create({
 	container: { flex: 1, backgroundColor: colors.background },
 	header: { paddingHorizontal: spacing.screenPadding, paddingBottom: 8 },
-	largeTitle: { ...typography.title2, color: colors.black, textAlign: "center" },
+	largeTitle: { fontSize: 28, fontWeight: "900", color: colors.darkGrey, textAlign: "center" },
 	subtitle: { ...typography.subheadline, color: colors.systemGray, marginTop: 4 },
 	list: { flex: 1 },
 	listContent: { paddingHorizontal: spacing.listInset, paddingTop: 16, paddingBottom: 100 },
 	columnWrapper: { marginBottom: 14, justifyContent: "space-between" },
 	swatchWrapper: { width: "48%" },
 	emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.listInset, paddingVertical: 60 },
-	emptyTitle: { ...typography.title2, color: colors.black, marginTop: 16, marginBottom: 8 },
-	emptySubtitle: { ...typography.body, color: colors.systemGray, textAlign: "center" },
+	emptyTitle: { ...typography.body, color: colors.systemGray, marginTop: 16, marginBottom: 8 },
+	emptySubtitle: { ...typography.footnote, color: colors.systemGray3, textAlign: "center", marginTop: 4 },
 });

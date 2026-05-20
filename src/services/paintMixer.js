@@ -52,7 +52,7 @@ const LATENT_SIZE = mixbox.LATENT_SIZE;
 const MAX_PIGMENTS = 5;
 const MIN_PIGMENTS = 3;
 
-const BLACK_PENALTY = 120; // stronger penalty so black is rarely used
+const BLACK_PENALTY = 120;
 const SUPER_DARK_LIGHTNESS = 0.06;
 const GREY_SATURATION = 0.18;
 
@@ -73,19 +73,6 @@ for (const k of KEYS) {
 function hexToRgb(hex) {
 	const v = hex.replace("#", "");
 	return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
-}
-
-function rgbToHex([r, g, b]) {
-	return (
-		"#" +
-		[r, g, b]
-			.map((v) =>
-				Math.max(0, Math.min(255, Math.round(v)))
-					.toString(16)
-					.padStart(2, "0"),
-			)
-			.join("")
-	);
 }
 
 function clampWeights(weights) {
@@ -113,12 +100,12 @@ function targetSaturation(rgb) {
 }
 
 function allowBlackForTarget(targetRgb) {
-	const L = targetLightness(targetRgb);
-	const sat = targetSaturation(targetRgb);
-	return L < SUPER_DARK_LIGHTNESS || sat < GREY_SATURATION;
+	const [r, g, b] = targetRgb;
+	// Allow black only when all RGB channels are under 25 (actually black)
+	return r < 25 && g < 25 && b < 25;
 }
 
-/* perceptual color distance using OkLab (we keep your functions) */
+/* Perceptual color distance (OkLab) */
 function srgbToLinear(c) {
 	return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
@@ -152,12 +139,6 @@ function deltaE(a, b) {
 /* ============================
    MIXING CORE (latent-based)
    ============================ */
-
-/** Mix paints using Mixbox latent space (weights must sum to 1) */
-function mixPaintsLatentByKeys(pigmentKeys, weights) {
-	const paints = pigmentKeys.map((k) => [PIGMENTS[k].r, PIGMENTS[k].g, PIGMENTS[k].b]);
-	return mixPaints(paints, weights);
-}
 
 function mixPaints(paints, weights) {
 	const latent = paints.map((rgb) => mixbox.rgbToLatent(rgb[0], rgb[1], rgb[2]));
@@ -314,9 +295,9 @@ function selectPigmentsByLatent(targetRgb, candidateKeys, maxCount = MAX_PIGMENT
 	return selected;
 }
 
-/** Local refinement (coordinate descent) similar to your old optimize but smaller / safer */
+/** Local refinement (coordinate descent) */
 function refineWeightsLocal(targetRgb, pigmentKeys, initWeights, opts = {}) {
-	const { iterations = 2000, pigmentKeysArg } = opts;
+	const { iterations = 2000 } = opts;
 	let weights = normalize(initWeights.slice());
 	let bestWeights = [...weights];
 	let bestErr = Infinity;
@@ -373,9 +354,19 @@ export function generatePaintMix(targetRgb) {
 	}
 	const targetArray = [targetRgb.r, targetRgb.g, targetRgb.b];
 
-	// decide black usage
-	const canUseBlack = allowBlackForTarget(targetArray);
-	const candidateKeys = canUseBlack ? [...KEYS] : KEYS.filter((k) => k !== "black");
+	// When target is actually black (all RGB < 25), return 100% black so latent selection doesn't pick e.g. warm blue
+	if (allowBlackForTarget(targetArray)) {
+		const lightness = Math.round(((Math.max(targetRgb.r, targetRgb.g, targetRgb.b) + Math.min(targetRgb.r, targetRgb.g, targetRgb.b)) / 510) * 100);
+		return {
+			pigments: { black: { name: "Black", percentage: 100, parts: 100 } },
+			totalParts: 100,
+			description: "100% Black",
+			mixingSteps: ["Use Black straight from the tube."],
+			lightness,
+		};
+	}
+
+	const candidateKeys = KEYS.filter((k) => k !== "black");
 
 	// select pigments (latent-based)
 	const selected = selectPigmentsByLatent(targetArray, candidateKeys, MAX_PIGMENTS);
@@ -388,29 +379,6 @@ export function generatePaintMix(targetRgb) {
 		iters: 2000,
 		lr: 0.8,
 	});
-
-	// If black is allowed but not present, still prefer dark pigments. Enforce tiny black only if required.
-	// If sum of top pigments weights is insufficient span-wise, we allow black (very small).
-	if (canUseBlack && !selected.includes("black")) {
-		// check reconstructed match; allow black as extra if helpful
-		const paints = selected.map((k) => [PIGMENTS[k].r, PIGMENTS[k].g, PIGMENTS[k].b]);
-		const mixedRgb = mixPaints(paints, w);
-		const dE = deltaE(targetArray, mixedRgb);
-		if (dE > 6) {
-			// try adding black as an extra candidate and re-solve
-			const trialKeys = [...selected, "black"];
-			const Ltrial = trialKeys.map((k) => LATENTS[k]);
-			const w2 = solveSimplexNNLS(Ltrial, mixbox.rgbToLatent(...targetArray), { iters: 1200, lr: 0.8 });
-			// impose black penalty into weight selection: if black weight tiny and reduces dE markedly keep it
-			const simulated = simulateMix(Object.fromEntries(trialKeys.map((k, i) => [k, w2[i]])));
-			const dE2 = deltaE(targetArray, [simulated.r, simulated.g, simulated.b]);
-			if (dE2 + blackPenalty(w2, trialKeys) / 100 < dE) {
-				// accept trial
-				selected.push("black");
-				w = w2;
-			}
-		}
-	}
 
 	// Keep only top N pigments (MIN..MAX) and renormalize
 	const pairs = selected.map((k, i) => ({ key: k, w: w[i] || 0 }));
@@ -516,7 +484,6 @@ export function getPigmentHex(key) {
 	return `#${hex(p.r)}${hex(p.g)}${hex(p.b)}`;
 }
 
-/* Reuse your simplified text helpers (adapted) */
 export function getSimplifiedMixInstructions(mix) {
 	if (!mix || !mix.pigments) return "";
 	return Object.entries(mix.pigments)

@@ -70,7 +70,7 @@ export default function FolderListScreen({ navigation }) {
 
 	const fourColors = (item) => {
 		const list = item.previewColors || [];
-		const placeholders = 4 - list.length;
+		const placeholders = Math.max(0, 4 - list.length);
 		return [...list.slice(0, 4), ...Array(placeholders).fill(colors.systemGray6)];
 	};
 
@@ -144,7 +144,7 @@ export default function FolderListScreen({ navigation }) {
 const styles = StyleSheet.create({
 	container: { flex: 1, backgroundColor: colors.background },
 	header: { paddingHorizontal: spacing.screenPadding, paddingBottom: 16 },
-	largeTitle: { ...typography.largeTitle, color: colors.black },
+	largeTitle: { fontSize: 28, fontWeight: "900", color: colors.darkGrey },
 	list: { flex: 1 },
 	listContent: { paddingHorizontal: spacing.listInset, paddingBottom: 100 },
 	cell: {
@@ -180,16 +180,16 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "center",
-		gap: 6,
-		paddingVertical: 12,
+		gap: 12,
+		height: 50,
 		paddingHorizontal: 20,
-		borderRadius: 20,
-		backgroundColor: colors.darkGrey,
+		borderRadius: 10,
+		backgroundColor: colors.ctaOrange,
 	},
-	actionButtonLabel: { ...typography.subheadline, fontWeight: "600", color: colors.white },
+	actionButtonLabel: { ...typography.body, fontWeight: "600", fontSize: 18, color: colors.white },
 	emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.listInset, paddingVertical: 60 },
-	emptyTitle: { ...typography.title2, color: colors.black, marginBottom: 8 },
-	emptySubtitle: { ...typography.body, color: colors.systemGray, textAlign: "center" },
+	emptyTitle: { ...typography.body, color: colors.systemGray, marginBottom: 8 },
+	emptySubtitle: { ...typography.footnote, color: colors.systemGray3, textAlign: "center", marginTop: 4 },
 	sheetOverlay: { flex: 1, justifyContent: "flex-end" },
 	sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
 	sheet: {
@@ -215,8 +215,8 @@ const styles = StyleSheet.create({
 		marginBottom: 20,
 	},
 	sheetActions: { flexDirection: "row", gap: 12 },
-	sheetButton: { flex: 1, paddingVertical: 14, alignItems: "center", justifyContent: "center", borderRadius: 16 },
+	sheetButton: { flex: 1, paddingVertical: 14, alignItems: "center", justifyContent: "center", borderRadius: 10 },
 	sheetButtonCancel: { ...typography.body, fontWeight: "600", color: colors.darkGrey },
-	sheetButtonPrimary: { backgroundColor: colors.darkGrey, borderRadius: 16 },
-	sheetButtonPrimaryText: { ...typography.body, fontWeight: "600", color: colors.white },
+	sheetButtonPrimary: { backgroundColor: colors.ctaOrange, borderRadius: 10 },
+	sheetButtonPrimaryText: { ...typography.body, fontWeight: "600", fontSize: 18, color: colors.white },
 });

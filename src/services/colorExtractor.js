@@ -77,6 +77,30 @@ async function getSinglePixelColor(x, y) {
 }
 
 /**
+ * Get color at a single pixel (for live drag preview).
+ * @param {string} imageUri - URI of the image
+ * @param {number} imageX - X in image coordinates
+ * @param {number} imageY - Y in image coordinates
+ * @param {number} imageWidth - Original image width (for clamping)
+ * @param {number} imageHeight - Original image height (for clamping)
+ * @returns {Promise<{hex: string, rgb: {r: number, g: number, b: number}} | null>}
+ */
+export async function getPixelColorAtImageCoords(imageUri, imageX, imageY, imageWidth, imageHeight) {
+  if (NATIVE_MODULE_MISSING) return null;
+  const x = Math.max(0, Math.min(imageWidth - 1, Math.round(imageX)));
+  const y = Math.max(0, Math.min(imageHeight - 1, Math.round(imageY)));
+  try {
+    await init(imageUri);
+    const rgb = await getSinglePixelColor(x, y);
+    if (!rgb) return null;
+    const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+    return { hex, rgb };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Extract color from a pixel grid around a tap point
  * Performs proper linear RGB averaging
  * 

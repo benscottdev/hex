@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import SwatchCard from "../components/SwatchCard";
 import { getSwatchesForFolder, getSwatches, deleteSwatch, saveSwatch } from "../services/storage";
+import { getColorName } from "../services/colorNameService";
 import { colors, typography, spacing, radius } from "../theme/ios";
 
 export default function FolderDetailScreen({ route, navigation }) {
@@ -59,11 +60,12 @@ export default function FolderDetailScreen({ route, navigation }) {
 
 	const handleAddToFolder = async (swatch) => {
 		try {
+			const name = swatch.name ?? (await getColorName(swatch.hex));
 			await saveSwatch({
 				folderId: folder.id,
 				folderName: folder.name,
 				hex: swatch.hex,
-				name: swatch.name ?? null,
+				name,
 				rgb: swatch.rgb ?? null,
 				sampling: swatch.sampling ?? null,
 				mix: swatch.mix ?? null,
@@ -90,20 +92,11 @@ export default function FolderDetailScreen({ route, navigation }) {
 					<Text style={styles.emptySubtitle}>Tap Add above to choose from your scanned colors.</Text>
 				</View>
 			) : (
-				<FlatList
-					data={swatches}
-					renderItem={renderSwatch}
-					keyExtractor={(item) => item.id}
-					numColumns={2}
-					columnWrapperStyle={styles.columnWrapper}
-					contentContainerStyle={styles.listContent}
-					style={styles.list}
-					showsVerticalScrollIndicator={false}
-				/>
+				<FlatList data={swatches} renderItem={renderSwatch} keyExtractor={(item) => item.id} numColumns={2} columnWrapperStyle={styles.columnWrapper} contentContainerStyle={styles.listContent} style={styles.list} showsVerticalScrollIndicator={false} />
 			)}
 
 			<Modal visible={addModalVisible} animationType="slide" transparent onRequestClose={() => setAddModalVisible(false)}>
-				<View style={[styles.addModalOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom + 16 }]}>
+				<View style={[styles.addModalOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
 					<TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setAddModalVisible(false)} />
 					<View style={styles.addModalSheet}>
 						<View style={styles.addModalHandle} />
@@ -126,8 +119,9 @@ export default function FolderDetailScreen({ route, navigation }) {
 									<TouchableOpacity style={styles.addModalRow} onPress={() => handleAddToFolder(item)} activeOpacity={0.7}>
 										<View style={[styles.addModalSwatch, { backgroundColor: item.hex }]} />
 										<View style={styles.addModalRowContent}>
-											<Text style={styles.addModalRowLabel} numberOfLines={1}>{item.name || item.hex}</Text>
-											{item.name && <Text style={styles.addModalRowHex} numberOfLines={1}>{item.hex}</Text>}
+											<Text style={styles.addModalRowLabel} numberOfLines={1}>
+												{item.hex}
+											</Text>
 										</View>
 										<Ionicons name="add-circle-outline" size={24} color={colors.darkGrey} />
 									</TouchableOpacity>
@@ -150,8 +144,8 @@ const styles = StyleSheet.create({
 	columnWrapper: { marginBottom: 12, justifyContent: "space-between" },
 	swatchWrapper: { width: "48%" },
 	emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.listInset, paddingVertical: 60 },
-	emptyTitle: { ...typography.title2, color: colors.black, marginTop: 16, marginBottom: 8 },
-	emptySubtitle: { ...typography.body, color: colors.systemGray, textAlign: "center" },
+	emptyTitle: { ...typography.body, color: colors.systemGray, marginTop: 16, marginBottom: 8 },
+	emptySubtitle: { ...typography.footnote, color: colors.systemGray3, textAlign: "center", marginTop: 4 },
 	headerButton: { flexDirection: "row", alignItems: "center", gap: 6, marginRight: 8 },
 	headerButtonLabel: { ...typography.body, fontWeight: "600", color: colors.darkGrey },
 	// Add-to-folder modal
@@ -191,5 +185,4 @@ const styles = StyleSheet.create({
 	addModalSwatch: { width: 44, height: 44, borderRadius: 12, marginRight: 14 },
 	addModalRowContent: { flex: 1, minWidth: 0 },
 	addModalRowLabel: { ...typography.subheadline, fontWeight: "600", color: colors.black },
-	addModalRowHex: { ...typography.caption1, color: colors.systemGray, marginTop: 2 },
 });

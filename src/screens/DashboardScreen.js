@@ -1,10 +1,9 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, Platform, ScrollView, TextInput, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import SwatchCard from "../components/SwatchCard";
-import { getFolders, createFolder, deleteFolder } from "../services/storage";
+import { getFolders, createFolder, deleteFolder, getSwatches } from "../services/storage";
 import { getRecentSwatches } from "../services/storage";
 import { colors, typography, spacing, radius } from "../theme/ios";
 const SHADOW = Platform.select({
@@ -25,9 +24,21 @@ export default function DashboardScreen({ navigation }) {
 	const [newFolderName, setNewFolderName] = useState("");
 
 	const loadData = async () => {
-		const [swatches, loadedFolders] = await Promise.all([getRecentSwatches(20), getFolders()]);
+		const [swatches, loadedFolders, allSwatches] = await Promise.all([getRecentSwatches(20), getFolders(), getSwatches()]);
 		setRecentSwatches(swatches);
-		setFolders(loadedFolders);
+		const byFolder = {};
+		allSwatches.forEach((s) => {
+			if (s.folderId) {
+				if (!byFolder[s.folderId]) byFolder[s.folderId] = [];
+				byFolder[s.folderId].push(s.hex);
+			}
+		});
+		const withPreviews = loadedFolders.map((f) => ({
+			...f,
+			previewColors: (byFolder[f.id] || []).slice(0, 6),
+			count: (byFolder[f.id] || []).length,
+		}));
+		setFolders(withPreviews);
 	};
 
 	useFocusEffect(
@@ -81,28 +92,46 @@ export default function DashboardScreen({ navigation }) {
 
 	return (
 		<View style={styles.wrapper}>
-			<ScrollView style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+			<View style={[styles.headingView, { marginTop: insets.top + 20 }]}>
+				<View style={{ alignItems: "center", justifyContent: "center", width: "100%" }}>
+					<Text style={[styles.welcomeHeading]}>Welcome, Ben!</Text>
+					<Text style={[styles.welcomeSubHeading]}>What are you creating today?</Text>
+				</View>
+			</View>
+
+			<View style={styles.floatingButtonContainer}>
+				<TouchableOpacity style={styles.floatingButton} onPress={() => navigation.navigate("ColorPicker", { fromHome: true })} activeOpacity={0.9}>
+					<Ionicons name="camera" size={28} color={colors.muted} />
+					<Text style={styles.floatingButtonText}>Extract a Color!</Text>
+				</TouchableOpacity>
+			</View>
+
+			<View style={[styles.container, { paddingTop: 24 }]}>
 				{/* Your Recents — 50px circles at top */}
 				<View style={styles.section}>
-					<Text style={[styles.sectionTitle, { paddingHorizontal: spacing.listInset }]}>Your Recents</Text>
+					<Text style={[styles.sectionTitle, { backgroundColor: "transparent", paddingHorizontal: spacing.listInset }]}>Your Recents</Text>
 					{recentSwatches.length === 0 ? (
 						<View style={styles.emptyRecents}>
 							<Ionicons name="color-palette-outline" size={40} color={colors.systemGray4} />
 							<Text style={styles.emptyRecentsText}>No colors yet</Text>
-							<Text style={styles.emptyRecentsSubtext}>Tap Scan to extract from an image</Text>
+							<Text style={styles.emptyRecentsSubtext}>Tap scan to extract from an image</Text>
 						</View>
 					) : (
 						<>
 							<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentsRow}>
 								{recentSwatches.slice(0, 5).map((swatch) => (
-									<View key={swatch.id} style={styles.recentCardWrapper}>
-										<SwatchCard
-											swatch={swatch}
-											onPress={() => navigation.navigate("SwatchDetail", { swatch, showFolder: false })}
-											onDelete={() => handleDeleteSwatch(swatch.id)}
-											horizontal
-										/>
-									</View>
+									<TouchableOpacity
+										key={swatch.id}
+										style={[styles.recentCircle, { backgroundColor: swatch.hex }]}
+										onPress={() => navigation.navigate("SwatchDetail", { swatch, showFolder: false })}
+										onLongPress={() => {
+											Alert.alert("Delete Swatch", "Delete this color?", [
+												{ text: "Cancel", style: "cancel" },
+												{ text: "Delete", style: "destructive", onPress: () => handleDeleteSwatch(swatch.id) },
+											]);
+										}}
+										activeOpacity={0.9}
+									/>
 								))}
 							</ScrollView>
 							{recentSwatches.length > 5 && (
@@ -115,34 +144,36 @@ export default function DashboardScreen({ navigation }) {
 					)}
 				</View>
 
-				{/* Folders (optional organization) */}
-				<View style={styles.section}>
-					<View style={styles.sectionHeader}>
-						<Text style={styles.sectionTitle}>Folders</Text>
-						<TouchableOpacity onPress={() => setModalVisible(true)}>
-							<Text style={styles.addFolderText}>+ New</Text>
-						</TouchableOpacity>
-					</View>
+				<View style={[styles.collectionsSection, folders.length > 0 && { height: "100%" }]}>
+					<Text style={[styles.sectionTitle, { backgroundColor: "transparent", paddingHorizontal: spacing.listInset }]}>Collections</Text>
 					{folders.length === 0 ? (
 						<View style={styles.emptyFolders}>
-							<Text style={styles.emptyFoldersText}>Organize colors into folders</Text>
-							<TouchableOpacity style={styles.createFolderCTA} onPress={() => setModalVisible(true)}>
-								<Text style={styles.createFolderCTAText}>Create Folder</Text>
-							</TouchableOpacity>
+							<Ionicons name="folder-outline" size={40} color={colors.systemGray4} />
+							<Text style={styles.emptyRecentsText}>No collections yet</Text>
+							<Text style={styles.emptyRecentsSubtext}>Create collections in the collections tab</Text>
+							{/* <TouchableOpacity style={styles.createFolderCTA} onPress={() => setModalVisible(true)}>
+								<Text style={styles.createFolderCTAText}>Create Collection</Text>
+							</TouchableOpacity> */}
 						</View>
 					) : (
-						folders.map((folder) => (
-							<TouchableOpacity key={folder.id} style={styles.folderCard} onPress={() => navigation.navigate("FolderDetail", { folder })} onLongPress={() => handleDeleteFolder(folder)} activeOpacity={0.9}>
-								<View style={styles.folderIcon}>
-									<Ionicons name="folder" size={24} color={colors.darkGrey} />
-								</View>
-								<View style={styles.folderContent}>
-									<Text style={styles.folderName}>{folder.name}</Text>
-									<Text style={styles.folderMeta}>{new Date(folder.createdAt).toLocaleDateString()}</Text>
-								</View>
-								<Ionicons name="chevron-forward" size={18} color={colors.darkGrey} />
-							</TouchableOpacity>
-						))
+						<ScrollView style={styles.collectionsScrollView} contentContainerStyle={styles.collectionsScrollContent} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+							{folders.map((folder) => {
+								const fourColors = [...(folder.previewColors || []).slice(0, 4), ...Array(4 - Math.min(4, (folder.previewColors || []).length)).fill(colors.systemGray6)];
+								return (
+									<TouchableOpacity key={folder.id} style={styles.folderCard} onPress={() => navigation.navigate("FolderDetail", { folder })} onLongPress={() => handleDeleteFolder(folder)} activeOpacity={0.7}>
+										<View style={styles.folderColorGrid}>
+											{fourColors.map((hex, i) => (
+												<View key={`${folder.id}-${i}-${hex}`} style={[styles.folderColorGridCell, { backgroundColor: hex }]} />
+											))}
+										</View>
+										<View style={styles.folderContent}>
+											<Text style={styles.folderName}>{folder.name}</Text>
+										</View>
+										<Text style={styles.folderCount}>{folder.count ?? 0}</Text>
+									</TouchableOpacity>
+								);
+							})}
+						</ScrollView>
 					)}
 				</View>
 
@@ -170,22 +201,62 @@ export default function DashboardScreen({ navigation }) {
 						</View>
 					</View>
 				</Modal>
-			</ScrollView>
-
-			{/* Floating Extract Button */}
-			<TouchableOpacity style={[styles.floatingButton, { bottom: insets.bottom - 20 }]} onPress={() => navigation.navigate("ColorPicker", { fromHome: true })} activeOpacity={0.9}>
-				<Ionicons name="camera" size={28} color={colors.darkGrey} />
-				<Text style={styles.floatingButtonText}>Extract</Text>
-			</TouchableOpacity>
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
+	welcomeHeading: {
+		fontSize: 28,
+		fontWeight: 900,
+		color: colors.darkGrey,
+	},
+	welcomeSubHeading: {
+		marginTop: 4,
+		fontWeight: 300,
+		color: "#c3c3c3",
+		fontSize: 16,
+	},
 	wrapper: { flex: 1, backgroundColor: colors.background },
 	container: { flex: 1 },
 	scrollContent: { paddingBottom: 100 },
 	section: { marginBottom: 24, width: "100%" },
+	collectionsSection: {
+		width: "100%",
+		marginBottom: 24,
+	},
+	collectionsScrollView: {
+		flex: 1,
+	},
+	collectionsScrollContent: {
+		paddingBottom: 8,
+	},
+	headingView: {
+		justifyContent: "space-between",
+		// alignItems: "center",
+		flexDirection: "row",
+		marginHorizontal: spacing.listInset,
+	},
+	floatingButtonContainer: {
+		width: "100%",
+		paddingHorizontal: spacing.listInset,
+	},
+	floatingButton: {
+		marginTop: 24,
+		height: 50,
+		flexDirection: "row",
+		justifyContent: "center",
+		alignItems: "center",
+		backgroundColor: colors.ctaOrange,
+		borderRadius: 10,
+		gap: 12,
+	},
+	floatingButtonText: {
+		fontWeight: "600",
+		fontSize: 18,
+		color: colors.white,
+	},
 	sectionHeader: {
 		flexDirection: "row",
 		justifyContent: "space-between",
@@ -194,19 +265,32 @@ const styles = StyleSheet.create({
 		marginBottom: 12,
 	},
 	sectionTitle: {
-		...typography.title3,
-		color: colors.black,
-		marginBottom: 12,
+		textTransform: "uppercase",
+		// padding: 8,/
+		fontWeight: 900,
+		fontSize: 18,
+		color: colors.sectionHeading,
+		marginBottom: 8,
+		borderRadius: 100,
+		textAlign: "center",
 	},
 	recentsRow: {
-		flexDirection: "row",
-		alignItems: "stretch",
 		paddingHorizontal: spacing.listInset,
+		borderRadius: 12,
+		width: "100%",
+		backgroundColor: "transparent",
+		flexDirection: "row",
+		justifyContent: "center",
+		alignItems: "center",
+		paddingVertical: 12,
 		gap: 12,
-		paddingBottom: 4,
 	},
-	recentCardWrapper: {
-		width: 150,
+	recentCircle: {
+		width: 64,
+		height: 64,
+		borderRadius: 2100,
+		borderWidth: 1,
+		borderColor: "rgba(58,58,60,0.18)",
 	},
 	addFolderText: {
 		...typography.subheadline,
@@ -245,10 +329,9 @@ const styles = StyleSheet.create({
 	emptyFolders: {
 		marginHorizontal: spacing.listInset,
 		padding: 20,
-		backgroundColor: colors.white,
-		borderRadius: 24,
+		backgroundColor: "transparent",
+		borderRadius: 12,
 		alignItems: "center",
-		...SHADOW,
 	},
 	emptyFoldersText: {
 		...typography.footnote,
@@ -272,29 +355,44 @@ const styles = StyleSheet.create({
 		backgroundColor: colors.white,
 		marginHorizontal: spacing.listInset,
 		marginBottom: 12,
-		padding: 16,
-		borderRadius: 24,
-		...SHADOW,
+		paddingVertical: 16,
+		paddingHorizontal: 16,
+		borderRadius: 12,
+		minHeight: 56,
+		borderWidth: 1,
+		borderColor: "rgba(58,58,60,0.08)",
 	},
-	folderIcon: {
+	folderColorGrid: {
 		width: 44,
 		height: 44,
-		borderRadius: 16,
-		backgroundColor: colors.yellow,
-		alignItems: "center",
-		justifyContent: "center",
 		marginRight: 14,
+		overflow: "hidden",
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: 2,
 	},
-	folderContent: { flex: 1 },
+	folderColorGridCell: {
+		width: 20,
+		height: 20,
+		borderRadius: 10,
+	},
+	folderContent: { flex: 1, minWidth: 0 },
 	folderName: {
-		...typography.body,
-		fontWeight: "600",
+		...typography.title3,
+		fontWeight: 700,
 		color: colors.darkGrey,
 	},
-	folderMeta: {
-		...typography.caption1,
-		color: "rgba(32,36,44,0.7)",
-		marginTop: 2,
+	folderCount: {
+		paddingTop: 3,
+		backgroundColor: colors.darkGrey,
+		textAlign: "center",
+		justifyContent: "center",
+		alignItems: "center",
+		width: 24,
+		height: 24,
+		color: colors.warmGray,
+		borderRadius: 100,
+		fontWeight: "600",
 	},
 	sheetOverlay: { flex: 1, justifyContent: "flex-end" },
 	sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
@@ -330,32 +428,6 @@ const styles = StyleSheet.create({
 	sheetActions: { flexDirection: "row", gap: 12 },
 	sheetButton: { flex: 1, paddingVertical: 14, alignItems: "center", justifyContent: "center", borderRadius: 16 },
 	sheetButtonCancel: { ...typography.body, fontWeight: "600", color: colors.darkGrey },
-	sheetButtonPrimary: { backgroundColor: colors.darkGrey, borderRadius: 16 },
+	sheetButtonPrimary: { backgroundColor: colors.ctaOrange, borderRadius: 10 },
 	sheetButtonPrimaryText: { ...typography.body, fontWeight: "600", color: colors.white },
-	floatingButton: {
-		position: "absolute",
-		left: spacing.listInset,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 8,
-		backgroundColor: colors.backgroundMuted,
-		paddingVertical: 16,
-		paddingHorizontal: 24,
-		borderRadius: 34,
-
-		...Platform.select({
-			ios: {
-				shadowColor: "#000",
-				shadowOffset: { width: 0, height: 4 },
-				shadowOpacity: 0.2,
-				shadowRadius: 12,
-			},
-			android: { elevation: 8 },
-		}),
-	},
-	floatingButtonText: {
-		...typography.body,
-		fontWeight: "600",
-		color: colors.darkGrey,
-	},
 });
