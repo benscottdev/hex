@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clearSkippedLogin } from '../services/storage';
 import { colors, typography, spacing, radius } from '../theme/ios';
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -63,7 +64,10 @@ export default function LoginScreen({ navigation, route }) {
         setError(signInError.message || 'Invalid login. Check your email and password.');
         return;
       }
-      // Auth state listener in App.js will switch to main app
+      await clearSkippedLogin();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     } catch (err) {
       const msg = err?.message || '';
       if (msg.includes('JSON') || msg.includes('Unexpected') || msg.includes('<')) {

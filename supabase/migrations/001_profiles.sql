@@ -1,4 +1,4 @@
--- Supabase schema: personal details only. Colors and collections stay local (AsyncStorage).
+-- Supabase schema: profiles (see 002_folders_colors.sql for synced collections).
 -- Run this in your Supabase project: Dashboard → SQL Editor → New query → paste and run.
 
 -- Profile table (one row per user, linked to auth.users)

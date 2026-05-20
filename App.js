@@ -7,7 +7,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
-import { getSkippedLogin, setSkippedLogin } from "./src/services/storage";
+import { AuthProvider } from "./src/context/AuthContext";
+import { getSkippedLogin, setSkippedLogin, clearSkippedLogin, migrateLocalDataToCloud } from "./src/services/storage";
 import DashboardScreen from "./src/screens/DashboardScreen";
 import FolderListScreen from "./src/screens/FolderListScreen";
 import FolderDetailScreen from "./src/screens/FolderDetailScreen";
@@ -18,6 +19,8 @@ import SwatchDetailScreen from "./src/screens/SwatchDetailScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
 import { colors } from "./src/theme/ios";
+
+let migrateScheduled = false;
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -106,6 +109,8 @@ function SettingsStack() {
 	return (
 		<Stack.Navigator screenOptions={stackScreenOptions}>
 			<Stack.Screen name="SettingsMain" component={SettingsScreen} options={{ headerShown: false }} />
+			<Stack.Screen name="Login" component={LoginScreen} options={{ title: "Sign in" }} />
+			<Stack.Screen name="Signup" component={SignupScreen} options={{ title: "Sign up" }} />
 		</Stack.Navigator>
 	);
 }
@@ -203,19 +208,38 @@ function RootNavigator() {
 				setSession(s);
 				setSkipped(skippedVal);
 				setInitialized(true);
+				if (s && !migrateScheduled) {
+					migrateScheduled = true;
+					migrateLocalDataToCloud().catch((e) => console.error("Cloud migrate failed:", e));
+				}
 			},
 		);
 		const {
 			data: { subscription },
-		} = supabase.auth.onAuthStateChange((_event, s) => {
+		} = supabase.auth.onAuthStateChange((event, s) => {
 			setSession(s);
-			if (!s) getSkippedLogin().then(setSkipped);
+			if (!s) {
+				migrateScheduled = false;
+				getSkippedLogin().then(setSkipped);
+			} else if (event === "SIGNED_IN" && !migrateScheduled) {
+				migrateScheduled = true;
+				migrateLocalDataToCloud().catch((e) => console.error("Cloud migrate failed:", e));
+			}
 		});
 		return () => subscription.unsubscribe();
 	}, []);
 
 	const handleSkip = () => {
 		setSkippedLogin().then(() => setSkipped(true));
+	};
+
+	const requestSignIn = () => {
+		clearSkippedLogin().then(() => setSkipped(false));
+	};
+
+	const handleSignOut = async () => {
+		await clearSkippedLogin();
+		await supabase.auth.signOut();
 	};
 
 	if (!initialized) {
@@ -226,7 +250,13 @@ function RootNavigator() {
 		);
 	}
 
-	return session || skipped ? <MainTabs /> : <AuthStack onSkip={handleSkip} />;
+	const showMain = session || skipped;
+
+	return (
+		<AuthProvider session={session} skipped={skipped} requestSignIn={requestSignIn} signOut={handleSignOut}>
+			{showMain ? <MainTabs /> : <AuthStack onSkip={handleSkip} />}
+		</AuthProvider>
+	);
 }
 
 export default function App() {

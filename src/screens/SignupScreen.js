@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { clearSkippedLogin } from '../services/storage';
 import { colors, typography, spacing, radius } from '../theme/ios';
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -69,7 +70,10 @@ export default function SignupScreen({ navigation }) {
       // If Supabase has email confirmation enabled, show message; otherwise session is set and App will switch
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // No confirmation required – auth gate will show main app
+        await clearSkippedLogin();
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
       } else {
         setError('');
         // Common case: "Check your email for the confirmation link"
